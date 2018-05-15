@@ -1,5 +1,6 @@
-#include "inference_helper.h"
-#include "timer.h"
+#include "v2/inference_helper.h"
+#include <iostream>
+#include "utils/timer.h"
 
 #define CHECK(stmt)                                            \
   do {                                                         \
@@ -83,10 +84,11 @@ void InferenceHelper::Init(const std::string& config_path,
   }
 }
 
-void InferenceHelper::Infer(int repeat) {
-  int input_height = 48;
-  int input_width = 512;
-  int input_channel = 1;
+void InferenceHelper::Infer(std::vector<int>& dims, int repeat) {
+  int batch_size = dims[0];
+  int input_channel = dims[1];
+  int input_height = dims[2];
+  int input_width = dims[3];
   int input_size = input_channel * input_height * input_width;
 
   // Create input arguments and matrix.
