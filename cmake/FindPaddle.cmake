@@ -34,7 +34,7 @@ if(USE_SHARED AND PADDLE_INC_DIR AND PADDLE_SHARED_LIB)
   set_target_properties(paddle_capi_shared PROPERTIES IMPORTED_LOCATION
                         ${PADDLE_SHARED_LIB})
   set(PADDLE_LIBRARIES paddle_capi_shared)
-  message(STATUS "Found PaddlePaddle (include: ${PADDLE_INC_DIR}; "
+  message(STATUS "Found PaddlePaddle v2 (include: ${PADDLE_INC_DIR}; "
                  "library: ${PADDLE_SHARED_LIB})")
 elseif(PADDLE_INC_DIR AND PADDLE_LAYERS_LIB AND PADDLE_ENGINE_LIB)
   set(PADDLE_FOUND ON)
@@ -58,6 +58,7 @@ elseif(PADDLE_INC_DIR AND PADDLE_WHOLE_LIB)
   set(PADDLE_LIBRARIES -Wl,--whole-archive paddle_capi_whole -Wl,--no-whole-archive)
 else()
   set(PADDLE_FOUND OFF)
+  message(WARNING "Cannot find PaddlePaddle v2 under ${PADDLE_ROOT}")
   return()
 endif()
 

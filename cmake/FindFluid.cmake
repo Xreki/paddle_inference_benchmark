@@ -19,13 +19,14 @@ set(PADDLE_ROOT $ENV{PADDLE_ROOT} CACHE PATH "Paddle Path")
 if(NOT PADDLE_ROOT)
   message(FATAL_ERROR "Set PADDLE_ROOT as your root directory installed PaddlePaddle")
 endif()
+set(THIRD_PARTY_ROOT ${PADDLE_ROOT}/third_party)
 
 find_path(PADDLE_INC_DIR NAMES paddle/fluid/inference/io.h PATHS ${PADDLE_ROOT})
 find_library(PADDLE_FLUID_SHARED_LIB NAMES "libpaddle_fluid.so" PATHS
     ${PADDLE_ROOT}/paddle/fluid/inference)
 find_library(PADDLE_FLUID_STATIC_LIB NAMES "libpaddle_fluid.a" PATHS
     ${PADDLE_ROOT}/paddle/fluid/inference)
-if(PADDLE_INC_DIR AND PADDLE_FLUID_SHARED_LIB)
+if(USE_SHARED AND PADDLE_INC_DIR AND PADDLE_FLUID_SHARED_LIB)
   set(PADDLE_FOUND ON)
   set(PADDLE_FLUID_FOUND ON)
   add_definitions(-DUSE_PADDLE_FLUID)
@@ -35,32 +36,74 @@ if(PADDLE_INC_DIR AND PADDLE_FLUID_SHARED_LIB)
   set(PADDLE_LIBRARIES paddle_fluid_shared)
   message(STATUS "Found PaddlePaddle Fluid (include: ${PADDLE_INC_DIR}; "
           "library: ${PADDLE_FLUID_SHARED_LIB}")
+elseif(PADDLE_INC_DIR AND PADDLE_FLUID_STATIC_LIB)
+  message(STATUS "Found PaddlePaddle Fluid (include: ${PADDLE_INC_DIR}; "
+          "library: ${PADDLE_FLUID_STATIC_LIB}")
 else()
   set(PADDLE_FOUND OFF)
   set(PADDLE_FLUID_FOUND OFF)
+  message(WARNING "Cannot find PaddlePaddle Fluid under ${PADDLE_ROOT}")
   return()
 endif()
 
 include_directories(${PADDLE_INC_DIR})
 
-find_path(PADDLE_GFLAGS_INC_DIR NAMES gflags/gflags.h PATHS
-          ${PADDLE_ROOT}/third_party/install/gflags/include
-          NO_DEFAULT_PATH)
-find_path(PADDLE_GLOG_INC_DIR NAMES glog/logging.h PATHS
-          ${PADDLE_ROOT}/third_party/install/glog/include
-          NO_DEFAULT_PATH)
-find_path(PADDLE_PROTOBUF_INC_DIR google/protobuf/message.h PATHS
-          ${PADDLE_ROOT}/third_party/install/protobuf/include
-          NO_DEFAULT_PATH)
-find_path(PADDLE_EIGEN_INC_DIR NAMES unsupported/Eigen/CXX11/Tensor PATHS
-          ${PADDLE_ROOT}/third_party/eigen3
-          NO_DEFAULT_PATH)
-if(PADDLE_GFLAGS_INC_DIR AND PADDLE_GLOG_INC_DIR AND PADDLE_PROTOBUF_INC_DIR AND PADDLE_EIGEN_INC_DIR)
-  set(PADDLE_THIRD_PARTY_INC_DIRS
-      ${PADDLE_GFLAGS_INC_DIR}
-      ${PADDLE_GLOG_INC_DIR}
-      ${PADDLE_PROTOBUF_INC_DIR}
-      ${PADDLE_EIGEN_INC_DIR})
-  message(STATUS "Paddle need to include these third party directories: ${PADDLE_THIRD_PARTY_INC_DIRS}")
-  include_directories(${PADDLE_THIRD_PARTY_INC_DIRS})
-endif()
+# including directory of third_party libraries
+set(PADDLE_THIRD_PARTY_INC_DIRS)
+function(third_party_include TARGET_NAME HEADER_NAME TARGET_DIRNAME)
+  find_path(PADDLE_${TARGET_NAME}_INC_DIR NAMES ${HEADER_NAME} PATHS
+            ${TARGET_DIRNAME}
+            NO_DEFAULT_PATH)
+  if(PADDLE_${TARGET_NAME}_INC_DIR)
+    message(STATUS "Found PaddlePaddle third_party including directory: " ${PADDLE_${TARGET_NAME}_INC_DIR})
+    set(PADDLE_THIRD_PARTY_INC_DIRS ${PADDLE_THIRD_PARTY_INC_DIRS} ${PADDLE_${TARGET_NAME}_INC_DIR} PARENT_SCOPE)
+  endif()
+endfunction()
+
+third_party_include(gflags gflags/gflags.h ${THIRD_PARTY_ROOT}/install/gflags/include)
+third_party_include(glog glog/logging.h ${THIRD_PARTY_ROOT}/install/glog/include)
+third_party_include(protobuf google/protobuf/message.h ${THIRD_PARTY_ROOT}/install/protobuf/include)
+third_party_include(eigen unsupported/Eigen/CXX11/Tensor ${THIRD_PARTY_ROOT}/eigen3)
+third_party_include(boost boost/config.hpp ${THIRD_PARTY_ROOT}/boost)
+message(STATUS "PaddlePaddle need to include these third party directories: ${PADDLE_THIRD_PARTY_INC_DIRS}")
+include_directories(${PADDLE_THIRD_PARTY_INC_DIRS})
+
+set(PADDLE_THIRD_PARTY_LIBRARIES)
+function(third_party_library TARGET_NAME TARGET_DIRNAME)
+  set(library_names ${ARGN})
+  foreach(lib ${library_names})
+    string(REGEX REPLACE "^lib" "" lib_noprefix ${lib})
+    if(${lib} MATCHES "${CMAKE_STATIC_LIBRARY_SUFFIX}$")
+      set(libtype STATIC)
+      string(REGEX REPLACE "${CMAKE_STATIC_LIBRARY_SUFFIX}$" "" libname ${lib_noprefix})
+    elseif(${lib} MATCHES "${CMAKE_SHARED_LIBRARY_SUFFIX}$")
+      set(libtype SHARED)
+      string(REGEX REPLACE "${CMAKE_SHARED_LIBRARY_SUFFIX}$" "" libname ${lib_noprefix})
+    else()
+      message(FATAL_ERROR "Unknown library type: ${lib}")
+    endif()
+    find_library(${libname}_LIBRARY NAMES "${lib}" PATHS
+        ${TARGET_DIRNAME}
+        NO_DEFAULT_PATH)
+    if(${libname}_LIBRARY)
+      add_library(${libname} ${libtype} IMPORTED)
+      set_target_properties(${libname} PROPERTIES IMPORTED_LOCATION ${${libname}_LIBRARY})
+      set(PADDLE_THIRD_PARTY_LIBRARIES ${PADDLE_THIRD_PARTY_LIBRARIES} ${libname} PARENT_SCOPE)
+      message(STATUS "Found PaddlePaddle third_party library: " ${${libname}_LIBRARY})
+    else()
+      message(WARNING "Cannot find ${lib} under ${THIRD_PARTY_ROOT}")
+    endif()
+  endforeach()
+  set(${TARGET_NAME}_FOUND ON PARENT_SCOPE)
+endfunction()
+
+third_party_library(mklml ${THIRD_PARTY_ROOT}/install/mklml/lib libiomp5.so libmklml_intel.so)
+#if(NOT USE_SHARED)
+#  third_party_library(protobuf ${THIRD_PARTY_ROOT}/install/protobuf/lib libprotobuf.a)
+#  third_party_library(glog ${THIRD_PARTY_ROOT}/install/glog/lib libglog.a)
+#  third_party_library(gflags ${THIRD_PARTY_ROOT}/install/gflags/lib libgflags.a)
+#  third_party_library(zlib ${THIRD_PARTY_ROOT}/install/zlib/lib libz.a)
+#  if(NOT mklml_FOUND)
+#  third_party_library(openblas ${THIRD_PARTY_ROOT}/install/openblas/lib libopenblas.a)
+#  endif()
+#endif()

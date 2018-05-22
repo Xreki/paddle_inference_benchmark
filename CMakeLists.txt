@@ -30,4 +30,6 @@ elseif(PADDLE_FOUND)
       ${PADDLE_LIBRARIES}
       ${PADDLE_THIRD_PARTY_LIBRARIES}
       -lrt -ldl -lpthread)
+else()
+  message(FATAL_ERROR "Cannot find PaddlePaddle Fluid or v2 under ${PADDLE_ROOT}")
 endif()
