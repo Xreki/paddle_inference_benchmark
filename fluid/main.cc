@@ -9,6 +9,8 @@ static std::string g_model_path = "";
 static std::string g_params_path = "";
 static std::vector<int> g_dims = {};
 static int g_repeat = 1;
+static bool g_use_gpu = false;
+static bool g_enable_profiler = false;
 
 /*
  * \brief parse command line arguments
@@ -29,6 +31,10 @@ void ParseArgs(int argc, char** argv) {
       while (std::getline(stream, token, 'x')) {
         g_dims.push_back(std::stoi(token));
       }
+    } else if (std::string(argv[i]) == "--use_gpu") {
+      g_use_gpu = std::stoi(argv[++i]) == 0 ? false : true;
+    } else if (std::string(argv[i]) == "--enable_profiler") {
+      g_enable_profiler = std::stoi(argv[++i]) == 0 ? false : true;
     }
   }
 }
@@ -36,7 +42,7 @@ void ParseArgs(int argc, char** argv) {
 int main(int argc, char* argv[]) {
   ParseArgs(argc, argv);
 
-  InferenceHelper helper(false);
+  InferenceHelper helper(g_use_gpu, g_enable_profiler);
   if (!g_model_path.empty() && !g_params_path.empty()) {
     helper.Init(g_model_path, g_params_path);
   } else if (!g_dirname.empty()) {

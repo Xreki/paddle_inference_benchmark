@@ -1,11 +1,12 @@
 #include "fluid/inference_helper.h"
-#include <time.h>
 #include <iostream>
 #include "paddle/fluid/framework/lod_tensor.h"
 #include "paddle/fluid/platform/profiler.h"
+#include "utils/timer.h"
 #include "utils/utils.h"
 
-InferenceHelper::InferenceHelper(bool use_gpu) : use_gpu_(use_gpu) {
+InferenceHelper::InferenceHelper(bool use_gpu, bool enable_profiler)
+    : use_gpu_(use_gpu), enable_profiler_(enable_profiler) {
   std::vector<std::string> argvs;
   argvs.push_back("--fraction_of_gpu_memory_to_use=0.1");
   if (use_gpu_) {
@@ -28,7 +29,10 @@ void InferenceHelper::Init(const std::string& dirname) {
   scope_ = new paddle::framework::Scope();
 
   // 2. Initialize the inference program
-  program_ = paddle::inference::Load(executor_, scope_, dirname);
+  {
+    Timer time("load_program");
+    program_ = paddle::inference::Load(executor_, scope_, dirname);
+  }
 
   // 3. Optional: perform optimization on the inference program
 
@@ -42,8 +46,11 @@ void InferenceHelper::Init(const std::string& model_path,
   scope_ = new paddle::framework::Scope();
 
   // 2. Initialize the inference program
-  program_ =
-      paddle::inference::Load(executor_, scope_, model_path, params_path);
+  {
+    Timer time("load_program");
+    program_ =
+        paddle::inference::Load(executor_, scope_, model_path, params_path);
+  }
 
   // 3. Optional: perform optimization on the inference program
 
@@ -57,8 +64,8 @@ void InferenceHelper::Infer(int repeat) {
   // 5. Set up maps for feed and fetch targets
   // set_feed_variable
   paddle::framework::LoDTensor input;
-  input.set_lod({{0, 10}});
-  paddle::framework::DDim input_dims = paddle::framework::make_ddim({10, 1});
+  input.set_lod({{0, 1024}});
+  paddle::framework::DDim input_dims = paddle::framework::make_ddim({1024, 1});
   int64_t* input_ptr =
       input.mutable_data<int64_t>(input_dims, paddle::platform::CPUPlace());
   Rand<int64_t>(input_ptr, input.numel(), 0, 5148);
@@ -71,6 +78,32 @@ void InferenceHelper::Infer(int repeat) {
 
   // Run the inference program
   executor_->Run(*program_, scope_, &feed_targets_, &fetch_targets_);
+
+  if (enable_profiler_) {
+    paddle::platform::ProfilerState state;
+    if (use_gpu_) {
+      state = paddle::platform::ProfilerState::kCUDA;
+      // paddle::platform::SetDeviceId(0);
+    } else {
+      state = paddle::platform::ProfilerState::kCPU;
+    }
+    paddle::platform::EnableProfiler(state);
+  }
+
+  {
+    Timer time("run_inference");
+    for (int i = 0; i < repeat; ++i) {
+      paddle::platform::RecordEvent record_event(
+          "run_inference",
+          paddle::platform::DeviceContextPool::Instance().Get(place_));
+      executor_->Run(*program_, scope_, &feed_targets_, &fetch_targets_);
+    }
+  }
+  if (enable_profiler_) {
+    paddle::platform::DisableProfiler(
+        paddle::platform::EventSortingKey::kDefault, "run_inference_profiler");
+    paddle::platform::ResetProfiler();
+  }
 }
 
 void InferenceHelper::Release() {

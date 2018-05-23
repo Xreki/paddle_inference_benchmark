@@ -4,7 +4,7 @@
 
 class InferenceHelper {
  public:
-  InferenceHelper(bool use_gpu = false);
+  InferenceHelper(bool use_gpu = false, bool enable_profiler = false);
   ~InferenceHelper() {
     delete executor_;
     delete scope_;
@@ -39,4 +39,5 @@ class InferenceHelper {
   paddle::framework::Scope* scope_{nullptr};
 
   bool use_gpu_{false};
+  bool enable_profiler_{false};
 };
