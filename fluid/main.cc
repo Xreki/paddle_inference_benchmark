@@ -11,6 +11,8 @@ static std::vector<int> g_dims = {};
 static int g_repeat = 1;
 static bool g_use_gpu = false;
 static bool g_enable_profiler = false;
+static bool g_share_variables = false;
+static bool g_prepare_context = false;
 
 /*
  * \brief parse command line arguments
@@ -35,6 +37,10 @@ void ParseArgs(int argc, char** argv) {
       g_use_gpu = std::stoi(argv[++i]) == 0 ? false : true;
     } else if (std::string(argv[i]) == "--enable_profiler") {
       g_enable_profiler = std::stoi(argv[++i]) == 0 ? false : true;
+    } else if (std::string(argv[i]) == "--share_variables") {
+      g_share_variables = std::stoi(argv[++i]) == 0 ? false : true;
+    } else if (std::string(argv[i]) == "--prepare_context") {
+      g_prepare_context = std::stoi(argv[++i]) == 0 ? false : true;
     }
   }
 }
@@ -43,6 +49,8 @@ int main(int argc, char* argv[]) {
   ParseArgs(argc, argv);
 
   InferenceHelper helper(g_use_gpu, g_enable_profiler);
+  helper.SetShareVariables(g_share_variables);
+  helper.SetPrepareContext(g_prepare_context);
   if (!g_model_path.empty() && !g_params_path.empty()) {
     helper.Init(g_model_path, g_params_path);
   } else if (!g_dirname.empty()) {

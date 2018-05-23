@@ -37,6 +37,13 @@ void InferenceHelper::Init(const std::string& dirname) {
   // 3. Optional: perform optimization on the inference program
 
   InitFeedFetchInfo();
+
+  if (share_variables_) {
+    executor_->CreateVariables(*program_, scope_, 0);
+  }
+  if (prepare_context_) {
+    context_ = executor_->Prepare(*program_, 0);
+  }
 }
 
 void InferenceHelper::Init(const std::string& model_path,
@@ -55,6 +62,13 @@ void InferenceHelper::Init(const std::string& model_path,
   // 3. Optional: perform optimization on the inference program
 
   InitFeedFetchInfo();
+
+  if (share_variables_) {
+    executor_->CreateVariables(*program_, scope_, 0);
+  }
+  if (prepare_context_) {
+    context_ = executor_->Prepare(*program_, 0);
+  }
 }
 
 void InferenceHelper::Infer(int repeat) {
@@ -77,7 +91,13 @@ void InferenceHelper::Infer(int repeat) {
   fetch_targets_[fetch_target_names_[0]] = &output;
 
   // Run the inference program
-  executor_->Run(*program_, scope_, &feed_targets_, &fetch_targets_);
+  if (prepare_context_) {
+    executor_->RunPreparedContext(context_.get(), scope_, &feed_targets_,
+                                  &fetch_targets_, true, !share_variables_);
+  } else {
+    executor_->Run(*program_, scope_, &feed_targets_, &fetch_targets_, true,
+                   !share_variables_);
+  }
 
   if (enable_profiler_) {
     paddle::platform::ProfilerState state;
@@ -96,7 +116,13 @@ void InferenceHelper::Infer(int repeat) {
       paddle::platform::RecordEvent record_event(
           "run_inference",
           paddle::platform::DeviceContextPool::Instance().Get(place_));
-      executor_->Run(*program_, scope_, &feed_targets_, &fetch_targets_);
+      if (prepare_context_) {
+        executor_->RunPreparedContext(context_.get(), scope_, &feed_targets_,
+                                      &fetch_targets_, true, !share_variables_);
+      } else {
+        executor_->Run(*program_, scope_, &feed_targets_, &fetch_targets_, true,
+                       !share_variables_);
+      }
     }
   }
   if (enable_profiler_) {

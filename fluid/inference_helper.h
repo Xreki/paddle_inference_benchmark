@@ -10,6 +10,14 @@ class InferenceHelper {
     delete scope_;
   }
 
+  void SetShareVariables(bool share_variables) {
+    share_variables_ = share_variables;
+  }
+
+  void SetPrepareContext(bool prepare_context) {
+    prepare_context_ = prepare_context;
+  }
+
   void Init(const std::string& dirname);
 
   void Init(const std::string& model_path, const std::string& params_path);
@@ -26,7 +34,9 @@ class InferenceHelper {
 
   void InitFeedFetchInfo();
 
-  std::unique_ptr<paddle::framework::ProgramDesc> program_;
+  std::unique_ptr<paddle::framework::ProgramDesc> program_{nullptr};
+  std::unique_ptr<paddle::framework::ExecutorPrepareContext> context_{nullptr};
+
   std::vector<std::string> feed_target_names_;
   std::vector<std::string> fetch_target_names_;
   std::vector<std::vector<int64_t>> feed_target_shapes_;
@@ -40,4 +50,6 @@ class InferenceHelper {
 
   bool use_gpu_{false};
   bool enable_profiler_{false};
+  bool share_variables_{false};
+  bool prepare_context_{false};
 };
