@@ -141,16 +141,21 @@ void InferenceHelper::PrintResults() {
   for (size_t i = 0; i < fetch_target_names_.size(); ++i) {
     paddle::framework::LoDTensor* output =
         fetch_targets_[fetch_target_names_[i]];
-    std::cout << "dims " << i << ": " << output->dims() << std::endl;
-    if (output->type().hash_code() == typeid(float).hash_code()) {
-      float* output_ptr = output->data<float>();
-      Print<float>(output_ptr, output->numel(),
-                   "results " + std::to_string(i) + ":");
-    } else if (output->type().hash_code() == typeid(int64_t).hash_code()) {
-      int64_t* output_ptr = output->data<int64_t>();
-      Print<int64_t>(output_ptr, output->numel(),
-                     "results " + std::to_string(i) + ":");
-    }
+    std::cout << "<<<Results " << i << ">>>" << std::endl;
+    PrintLoDTensor(*output);
+    std::cout << std::endl;
+  }
+}
+
+void InferenceHelper::PrintLoDTensor(const paddle::framework::LoDTensor& t) {
+  std::cout << "lod: " << t.lod() << std::endl;
+  std::cout << "dims: " << t.dims() << std::endl;
+  if (t.type().hash_code() == typeid(float).hash_code()) {
+    const float* ptr = t.data<float>();
+    Print<float>(ptr, t.numel(), std::string("data: "));
+  } else if (t.type().hash_code() == typeid(int64_t).hash_code()) {
+    const int64_t* ptr = t.data<int64_t>();
+    Print<int64_t>(ptr, t.numel(), std::string("data: "));
   }
 }
 

@@ -30,7 +30,7 @@ void Rand(T* data, size_t length, T lower, T upper) {
 }
 
 template <typename T>
-void Print(T* data, size_t length, std::string discription) {
+void Print(const T* data, size_t length, std::string discription) {
   std::cout << discription << " [";
   if (length > 0) {
     std::cout << data[0];

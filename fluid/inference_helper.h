@@ -29,6 +29,8 @@ class InferenceHelper {
   void PrintResults();
 
  private:
+  void PrintLoDTensor(const paddle::framework::LoDTensor& t);
+
   std::vector<std::vector<int64_t>> GetTargetShapes(
       const std::vector<std::string>& target_names);
 
