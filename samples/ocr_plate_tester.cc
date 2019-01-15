@@ -185,17 +185,11 @@ void SetInputs(std::vector<paddle::PaddleTensor> &input_tensors, std::string &im
 void profile(std::string model_dir, bool use_gpu, bool use_analysis, bool use_tensorrt) {
   std::vector<paddle::PaddleTensor> outputs;
 
-  if (use_gpu && (use_analysis || use_tensorrt)) {
-    contrib::AnalysisConfig config;
-    SetConfig<contrib::AnalysisConfig>(&config, model_dir, use_gpu, use_tensorrt,
-                                       FLAGS_batch_size);
-    TestImpl(reinterpret_cast<PaddlePredictor::Config *>(&config), &outputs, true);
-  } else {
-    NativeConfig config;
-    SetConfig<NativeConfig>(&config, model_dir, use_gpu, false);
-    TestImpl(reinterpret_cast<PaddlePredictor::Config *>(&config), &outputs, false);
-  }
-
+  contrib::AnalysisConfig config;
+  SetConfig<contrib::AnalysisConfig>(&config, model_dir, use_gpu, use_tensorrt,
+                                     FLAGS_batch_size);
+  TestImpl(reinterpret_cast<PaddlePredictor::Config *>(&config), &outputs, use_gpu && (use_analysis || use_tensorrt));
+  
   for (size_t i = 0; i < outputs.size(); ++i) {
     LOG(INFO) << "<<< output: " << i << " >>>";
     PrintTensor(outputs[i], 4);

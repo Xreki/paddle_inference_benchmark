@@ -181,6 +181,8 @@ int GenerateInputList(std::vector<std::string>* input_list, std::string& input_d
 }
 
 void TestImpl(const PaddlePredictor::Config *config, std::vector<paddle::PaddleTensor> *outputs, bool use_analysis = true) {
+  PrintConfig(config, use_analysis);
+
   int batch_size = FLAGS_batch_size;
   int num_times = FLAGS_repeat;
   auto predictor = CreateTestPredictor(config, use_analysis);
