@@ -92,12 +92,8 @@ void SetInputs(std::vector<paddle::PaddleTensor> &input_tensors, std::string &im
   //
   paddle::PaddleTensor init_ids_tensor;
 
-  std::vector<int> ids_shape;
-  ids_shape.push_back(batch_size);
-  ids_shape.push_back(1);
-
-  std::vector<int64_t> init_ids;
-  init_ids.push_back(0);
+  std::vector<int> ids_shape = {batch_size, 1};
+  std::vector<int64_t> init_ids = {0};
 
   init_ids_tensor.name = "init_ids";
   init_ids_tensor.shape = ids_shape;
