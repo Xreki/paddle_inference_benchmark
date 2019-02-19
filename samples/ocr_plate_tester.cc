@@ -103,8 +103,6 @@ void SetInputs(std::vector<paddle::PaddleTensor> &input_tensors,
   std::copy(init_ids.begin(), init_ids.end(),
             static_cast<int64_t *>(init_ids_tensor.data.data()));
 
-  std::vector<size_t> lod_1 = {0, 1};
-  std::vector<size_t> lod_2 = {0, 1};
   std::vector<std::vector<size_t>> lod = {{0, 1}, {0, 1}};
   init_ids_tensor.lod = lod;
 
