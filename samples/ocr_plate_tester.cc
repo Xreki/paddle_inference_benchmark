@@ -49,7 +49,8 @@ void ConvertOutput(const std::vector<paddle::PaddleTensor> &tensors) {
   // }
 }
 
-void SetInputs(std::vector<paddle::PaddleTensor> &input_tensors, std::string &image_path, std::string &image_dims) {
+void SetInputs(std::vector<paddle::PaddleTensor> &input_tensors,
+               std::string &image_path, std::string &image_dims) {
   //
   // image tensor -> pixel
   //
@@ -80,8 +81,8 @@ void SetInputs(std::vector<paddle::PaddleTensor> &input_tensors, std::string &im
   image_tensor.dtype = paddle::PaddleDType::FLOAT32;
   std::vector<int> image_shape = {batch_size, channel, height, width};
   if (image_path.empty()) {
-    SetupTensor<float>(image_tensor, image_shape,
-                       static_cast<float>(-1), static_cast<float>(1));
+    SetupTensor<float>(image_tensor, image_shape, static_cast<float>(-1),
+                       static_cast<float>(1));
   } else {
     LOG(INFO) << "image_path: " << image_path;
     SetupTensor<float>(image_path, image_tensor, &image_shape, 127.5);
@@ -178,14 +179,16 @@ void SetInputs(std::vector<paddle::PaddleTensor> &input_tensors, std::string &im
 #endif
 }
 
-void profile(std::string model_dir, bool use_gpu, bool use_analysis, bool use_tensorrt) {
+void profile(std::string model_dir, bool use_gpu, bool use_analysis,
+             bool use_tensorrt) {
   std::vector<paddle::PaddleTensor> outputs;
 
-  contrib::AnalysisConfig config;
-  SetConfig<contrib::AnalysisConfig>(&config, model_dir, use_gpu, use_tensorrt,
-                                     FLAGS_batch_size);
-  TestImpl(reinterpret_cast<PaddlePredictor::Config *>(&config), &outputs, use_gpu && (use_analysis || use_tensorrt));
-  
+  AnalysisConfig config;
+  SetConfig<AnalysisConfig>(&config, model_dir, use_gpu, use_tensorrt,
+                            FLAGS_batch_size);
+  TestImpl(reinterpret_cast<PaddlePredictor::Config *>(&config), &outputs,
+           use_gpu && (use_analysis || use_tensorrt));
+
   for (size_t i = 0; i < outputs.size(); ++i) {
     LOG(INFO) << "<<< output: " << i << " >>>";
     PrintTensor(outputs[i], 4);

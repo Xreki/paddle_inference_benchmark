@@ -14,13 +14,13 @@ limitations under the License. */
 
 #pragma once
 
+#include <dirent.h>
 #include <glog/logging.h>
 #include <fstream>
 #include <random>
 #include <sstream>
 #include <string>
 #include <vector>
-#include <dirent.h>
 
 #include "paddle/fluid/inference/tests/api/tester_helper.h"
 
@@ -34,7 +34,8 @@ DEFINE_string(image_dims, "", "Dims of input data.");
 namespace paddle {
 namespace inference {
 
-void SetInputs(std::vector<paddle::PaddleTensor> &input_tensors, std::string &input_path, std::string &input_dims);
+void SetInputs(std::vector<paddle::PaddleTensor>& input_tensors,
+               std::string& input_path, std::string& input_dims);
 
 std::vector<int> ParseDims(std::string dims_str) {
   std::vector<int> dims;
@@ -128,9 +129,9 @@ void SetConfig(ConfigType* config, std::string model_dir, bool use_gpu,
 }
 
 template <>
-void SetConfig<contrib::AnalysisConfig>(contrib::AnalysisConfig* config,
-                                        std::string model_dir, bool use_gpu,
-                                        bool use_tensorrt, int batch_size) {
+void SetConfig<AnalysisConfig>(AnalysisConfig* config, std::string model_dir,
+                               bool use_gpu, bool use_tensorrt,
+                               int batch_size) {
   if (!FLAGS_prog_filename.empty() && !FLAGS_param_filename.empty()) {
     config->SetModel(model_dir + "/" + FLAGS_prog_filename,
                      model_dir + "/" + FLAGS_param_filename);
@@ -150,8 +151,9 @@ void SetConfig<contrib::AnalysisConfig>(contrib::AnalysisConfig* config,
   }
 }
 
-int GenerateInputList(std::vector<std::string>* input_list, std::string& input_dir) {
-  DIR *dir = NULL;
+int GenerateInputList(std::vector<std::string>* input_list,
+                      std::string& input_dir) {
+  DIR* dir = NULL;
   if ((dir = opendir(input_dir.c_str())) == NULL) {
     std::cerr << "Open image dir failed. Dir: " << input_dir << std::endl;
     return -1;
@@ -164,12 +166,12 @@ int GenerateInputList(std::vector<std::string>* input_list, std::string& input_d
       continue;
     }
     std::string filename = std::string(ptr->d_name);
-    if (filename.length() < 5){
+    if (filename.length() < 5) {
       std::cerr << "Wrong image file format: " << filename << std::endl;
       continue;
     } else {
       std::string suffix = filename.substr(filename.length() - 4, 4);
-      if (suffix.compare(".txt") != 0){
+      if (suffix.compare(".txt") != 0) {
         std::cerr << "Wrong image file format: " << filename << std::endl;
         continue;
       }
@@ -180,7 +182,9 @@ int GenerateInputList(std::vector<std::string>* input_list, std::string& input_d
   return 0;
 }
 
-void TestImpl(const PaddlePredictor::Config *config, std::vector<paddle::PaddleTensor> *outputs, bool use_analysis = true) {
+void TestImpl(const PaddlePredictor::Config* config,
+              std::vector<paddle::PaddleTensor>* outputs,
+              bool use_analysis = true) {
   PrintConfig(config, use_analysis);
 
   int batch_size = FLAGS_batch_size;
@@ -193,7 +197,8 @@ void TestImpl(const PaddlePredictor::Config *config, std::vector<paddle::PaddleT
 
   std::vector<std::string> input_list;
   if (GenerateInputList(&input_list, FLAGS_image_dir)) {
-    LOG(WARNING) << "Get no inputs in image_dir (" << FLAGS_image_dir << "), use fake inputs instead.";
+    LOG(WARNING) << "Get no inputs in image_dir (" << FLAGS_image_dir
+                 << "), use fake inputs instead.";
     input_list.push_back("dummpy");
   }
 
@@ -225,7 +230,7 @@ void TestImpl(const PaddlePredictor::Config *config, std::vector<paddle::PaddleT
 
       LOG(INFO) << "Run " << num_times << " times...";
     }
-          
+
     {
       Timer run_timer;
       run_timer.tic();
