@@ -32,12 +32,28 @@ void SetInputs(std::vector<paddle::PaddleTensor> &input_tensors,
   q_ids_tensor.name = "q_ids";
   q_ids_tensor.shape = q_ids_shape;
   q_ids_tensor.dtype = paddle::PaddleDType::INT64;
-  q_ids_tensor.data.Resize(sizeof(int64_t) * 8);
+  q_ids_tensor.data.Resize(sizeof(int64_t) * q_ids_shape[0]);
   std::copy(q_ids.begin(), q_ids.end(),
             static_cast<int64_t *>(q_ids_tensor.data.data()));
 
   std::vector<std::vector<size_t>> q_ids_lod = {{0, 2, 4}, {0, 1, 3, 7, 8}};
   q_ids_tensor.lod = q_ids_lod;
+
+  // start_lables
+  paddle::PaddleTensor start_labels_tensor;
+
+  std::vector<int> start_labels_shape = {5, 1};
+  std::vector<int64_t> start_labels = {3, 5, 2, 1, 7};
+
+  start_labels_tensor.name = "start_lables";
+  start_labels_tensor.shape = start_labels_shape;
+  start_labels_tensor.dtype = paddle::PaddleDType::INT64;
+  start_labels_tensor.data.Resize(sizeof(int64_t) * start_labels_shape[0]);
+  std::copy(start_labels.begin(), start_labels.end(),
+            static_cast<int64_t *>(start_labels_tensor.data.data()));
+
+  std::vector<std::vector<size_t>> start_labels_lod = {{0, 2, 5}};
+  start_labels_tensor.lod = start_labels_lod;
 
   // p_ids
   paddle::PaddleTensor p_ids_tensor;
@@ -48,7 +64,7 @@ void SetInputs(std::vector<paddle::PaddleTensor> &input_tensors,
   p_ids_tensor.name = "p_ids";
   p_ids_tensor.shape = p_ids_shape;
   p_ids_tensor.dtype = paddle::PaddleDType::INT64;
-  p_ids_tensor.data.Resize(sizeof(int64_t) * 5);
+  p_ids_tensor.data.Resize(sizeof(int64_t) * p_ids_shape[0]);
   std::copy(p_ids.begin(), p_ids.end(),
             static_cast<int64_t *>(p_ids_tensor.data.data()));
 
@@ -58,21 +74,22 @@ void SetInputs(std::vector<paddle::PaddleTensor> &input_tensors,
   // q_id0
   paddle::PaddleTensor q_id0_tensor;
 
-  std::vector<int> q_id0_shape = {3, 1};
-  std::vector<int64_t> q_id0 = {5, 4, 1};
+  std::vector<int> q_id0_shape = {8, 1};
+  std::vector<int64_t> q_id0 = {5, 4, 1, 8, 9, 2, 3, 7};
 
   q_id0_tensor.name = "q_id0";
   q_id0_tensor.shape = q_id0_shape;
   q_id0_tensor.dtype = paddle::PaddleDType::INT64;
-  q_id0_tensor.data.Resize(sizeof(int64_t) * 3);
+  q_id0_tensor.data.Resize(sizeof(int64_t) * q_id0_shape[0]);
   std::copy(q_id0.begin(), q_id0.end(),
             static_cast<int64_t *>(q_id0_tensor.data.data()));
 
-  std::vector<std::vector<size_t>> q_id0_lod = {{0, 2, 3}};
+  std::vector<std::vector<size_t>> q_id0_lod = {{0, 3, 8}};
   q_id0_tensor.lod = q_id0_lod;
 
   // input_tensors
   input_tensors.push_back(q_ids_tensor);
+  input_tensors.push_back(start_labels_tensor);
   input_tensors.push_back(p_ids_tensor);
   input_tensors.push_back(q_id0_tensor);
 }
