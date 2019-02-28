@@ -144,10 +144,10 @@ void SetConfig<AnalysisConfig>(AnalysisConfig* config, std::string model_dir,
       config->EnableTensorRtEngine(1 << 10, batch_size);
       config->pass_builder()->DeletePass("conv_bn_fuse_pass");
       config->pass_builder()->DeletePass("fc_fuse_pass");
-      config->pass_builder()->TurnOnDebug();
     } else {
       config->SwitchIrOptim();
     }
+    config->pass_builder()->TurnOnDebug();
   }
 }
 
