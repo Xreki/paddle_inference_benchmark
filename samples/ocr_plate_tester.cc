@@ -21,32 +21,35 @@
 namespace paddle {
 namespace inference {
 
-void ConvertOutput(const std::vector<paddle::PaddleTensor> &tensors) {
-  std::vector<std::vector<float>> data_alls;
-  std::vector<std::vector<int>> shape_alls;
+std::vector<float> GeneratePositionData(std::vector<int> shape) {
+  PADDLE_ENFORCE_EQ(shape.size(), 4UL);
+  PADDLE_ENFORCE_EQ(shape[0], 1UL);
+  PADDLE_ENFORCE_EQ(shape[1], 33UL);
 
-  // use reference to avoid double free
-  for (auto &t : tensors) {
-    shape_alls.push_back(t.shape);
-    const size_t num_elements = t.data.length() / sizeof(float);
-    float *t_data = static_cast<float *>(t.data.data());
-    std::vector<float> data(num_elements, 0);
-    std::copy(t_data, t_data + num_elements, data.data());
-    data_alls.push_back(data);
+  std::vector<float> position_data;
+  for (int i = 0; i < 10; i++) {
+    for (int row = 0; row < shape[2]; row++) {
+      for (int col = 0; col < shape[3]; col++) {
+        if (i == row) {
+          position_data.push_back(1.);
+        } else {
+          position_data.push_back(0.);
+        }
+      }
+    }
   }
-
-  // std::string plate_str = "";
-  // for (float k : data_alls[0]) {
-  //   std::cerr << "text\t" << k << std::endl;
-  //   if (k == 0 || k == 1 || k == 2) {
-  //     continue;
-  //   }
-  //   // plate_str += table_dict[k];
-  // }
-
-  // for (float k : data_alls[1]) {
-  //   std::cerr << "scores\t" << k << std::endl;
-  // }
+  for (int i = 0; i < 23; i++) {
+    for (int row = 0; row < shape[2]; row++) {
+      for (int col = 0; col < shape[3]; col++) {
+        if (i == col) {
+          position_data.push_back(1.);
+        } else {
+          position_data.push_back(0.);
+        }
+      }
+    }
+  }
+  return position_data;
 }
 
 void SetInputs(std::vector<paddle::PaddleTensor> &input_tensors,
@@ -81,11 +84,11 @@ void SetInputs(std::vector<paddle::PaddleTensor> &input_tensors,
   image_tensor.dtype = paddle::PaddleDType::FLOAT32;
   std::vector<int> image_shape = {batch_size, channel, height, width};
   if (image_path.empty()) {
-    SetupTensor<float>(image_tensor, image_shape, static_cast<float>(-1),
+    SetupTensor<float>(&image_tensor, image_shape, static_cast<float>(-1),
                        static_cast<float>(1));
   } else {
     LOG(INFO) << "image_path: " << image_path;
-    SetupTensor<float>(image_path, image_tensor, &image_shape, 127.5);
+    SetupTensor<float>(image_path, &image_tensor, &image_shape, 127.5);
   }
 
   //
@@ -95,41 +98,43 @@ void SetInputs(std::vector<paddle::PaddleTensor> &input_tensors,
 
   std::vector<int> ids_shape = {batch_size, 1};
   std::vector<int64_t> init_ids = {0};
+  std::vector<std::vector<size_t>> lod = {{0, 1}, {0, 1}};
 
   init_ids_tensor.name = "init_ids";
-  init_ids_tensor.shape = ids_shape;
   init_ids_tensor.dtype = paddle::PaddleDType::INT64;
-  init_ids_tensor.data.Resize(sizeof(int64_t) * 1);
-  std::copy(init_ids.begin(), init_ids.end(),
-            static_cast<int64_t *>(init_ids_tensor.data.data()));
-
-  std::vector<std::vector<size_t>> lod = {{0, 1}, {0, 1}};
   init_ids_tensor.lod = lod;
+  SetupTensor<int64_t>(&init_ids_tensor, ids_shape, init_ids);
 
   //
   // init scores
   //
   paddle::PaddleTensor init_scores_tensor;
 
-  std::vector<int> scores_shape;
-  scores_shape.push_back(1);
-  scores_shape.push_back(1);
-
-  std::vector<float> init_scores;
-  init_scores.push_back(1.0);
+  std::vector<int> scores_shape = {1, 1};
+  std::vector<float> init_scores = {1.0};
 
   init_scores_tensor.name = "init_scores";
-  init_scores_tensor.shape = scores_shape;
   init_scores_tensor.dtype = paddle::PaddleDType::FLOAT32;
-  init_scores_tensor.data.Resize(sizeof(float) * 1);
-  std::copy(init_scores.begin(), init_scores.end(),
-            static_cast<float *>(init_scores_tensor.data.data()));
   init_scores_tensor.lod = lod;
+  SetupTensor<float>(&init_scores_tensor, scores_shape, init_scores);
+
+  //  
+  // parent_idx
+  //  
+  paddle::PaddleTensor parent_idx_tensor;
+
+  std::vector<int> parent_idx_shape = {1};
+  std::vector<int64_t> parent_idx = {0};
+
+  parent_idx_tensor.name = "parent_idx";
+  parent_idx_tensor.dtype = paddle::PaddleDType::INT64;
+  SetupTensor<int64_t>(&parent_idx_tensor, parent_idx_shape, parent_idx);
 
   // input_tensors
   input_tensors.push_back(image_tensor);
   input_tensors.push_back(init_ids_tensor);
   input_tensors.push_back(init_scores_tensor);
+  input_tensors.push_back(parent_idx_tensor);
 
 #if 0
   //
@@ -137,59 +142,146 @@ void SetInputs(std::vector<paddle::PaddleTensor> &input_tensors,
   //
   paddle::PaddleTensor position_encoding_tensor;
 
-  std::vector<int> position_encoding_shape;
-  position_encoding_shape.push_back(1);
-  position_encoding_shape.push_back(33);
-  position_encoding_shape.push_back(10);
-  position_encoding_shape.push_back(23);
-
-  std::vector<int> pos_data;
-  for (int i = 0; i < 10; i++) {
-    for (int row = 0; row < 10; row++) {
-      for (int col = 0; col < 23; col++) {
-        if (i == row) {
-          pos_data.push_back(1);
-        } else {
-          pos_data.push_back(0);
-        }
-      }
-    }
-  }
-  for (int i = 0; i < 23; i++) {
-    for (int row = 0; row < 10; row++) {
-      for (int col = 0; col < 23; col++) {
-        if (i == col) {
-          pos_data.push_back(1);
-        } else {
-          pos_data.push_back(0);
-        }
-      }
-    }
-  }
+  std::vector<int> position_encoding_shape = {1, 33, 10, 23};
+  std::vector<float> position_encoding = GeneratePositionData(position_encoding_shape);
 
   position_encoding_tensor.name = "position_encoding";
   position_encoding_tensor.shape = position_encoding_shape;
   position_encoding_tensor.dtype = paddle::PaddleDType::FLOAT32;
-  position_encoding_tensor.data.Resize(sizeof(float) * 33 * 10 * 23);
-  std::copy(pos_data.begin(), pos_data.end(),
-            static_cast<float *>(position_encoding_tensor.data.data()));
+  SetupTensor<float>(&position_encoding_tensor, position_encoding_shape, position_encoding);
+
   input_tensors.push_back(position_encoding_tensor);
 #endif
 }
 
+void SetZeroCopyInputs(std::vector<std::unique_ptr<paddle::ZeroCopyTensor>>& input_tensors,
+                       std::string &image_path, std::string &image_dims) {
+  //
+  // image tensor -> pixel
+  //
+  auto& image_tensor = input_tensors[0];
+
+  int batch_size = 1;
+  int channel = 1;
+  int height = 48;
+  int width = 512;
+  if (!image_dims.empty()) {
+    std::vector<int> image_shape = ParseDims(image_dims);
+    size_t length = image_shape.size();
+    if (length >= 4) {
+      batch_size = image_shape[length - 4];
+    }
+    if (length >= 3) {
+      channel = image_shape[length - 3];
+    }
+    if (length >= 2) {
+      height = image_shape[length - 2];
+    }
+    if (length >= 1) {
+      width = image_shape[length - 1];
+    }
+  }
+
+  std::vector<int> image_shape = {batch_size, channel, height, width};
+  if (image_path.empty()) {
+    SetupZeroCopyTensor<float>(image_tensor.get(), image_shape, static_cast<float>(-1),
+                       static_cast<float>(1));
+  } else {
+    LOG(INFO) << "image_path: " << image_path;
+    SetupZeroCopyTensor<float>(image_path, image_tensor.get(), &image_shape, 127.5);
+  }
+
+  //
+  // init_ids_tensor -> init_ids
+  //
+  auto& init_ids_tensor = input_tensors[1];
+
+  std::vector<int> ids_shape = {batch_size, 1};
+  std::vector<int64_t> init_ids = {0};
+  std::vector<std::vector<size_t>> lod = {{0, 1}, {0, 1}};
+
+  SetupZeroCopyTensor<int64_t>(init_ids_tensor.get(), ids_shape, init_ids);
+  init_ids_tensor->SetLoD(lod);
+
+  //
+  // init scores
+  //
+  auto& init_scores_tensor = input_tensors[2];
+
+  std::vector<int> scores_shape = {1, 1};
+  std::vector<float> init_scores = {1.0};
+
+  SetupZeroCopyTensor<float>(init_scores_tensor.get(), scores_shape, init_scores);
+  init_scores_tensor->SetLoD(lod);
+}
+
 void profile(std::string model_dir, bool use_gpu, bool use_analysis,
              bool use_tensorrt) {
-  std::vector<paddle::PaddleTensor> outputs;
-
   AnalysisConfig config;
   SetConfig<AnalysisConfig>(&config, model_dir, use_gpu, use_tensorrt,
                             FLAGS_batch_size);
-  TestImpl(reinterpret_cast<PaddlePredictor::Config *>(&config), &outputs,
-           use_gpu && (use_analysis || use_tensorrt));
+  if (FLAGS_use_analysis && FLAGS_use_zerocopy) {
+    // Zero-copy is not beneficial for inference on GPU.
+    auto predictor = CreateTestPredictor(
+        reinterpret_cast<PaddlePredictor::Config *>(&config), use_analysis);
 
-  for (size_t i = 0; i < outputs.size(); ++i) {
-    LOG(INFO) << "<<< output: " << i << " >>>";
-    PrintTensor(outputs[i], 4);
+    std::vector<std::unique_ptr<paddle::ZeroCopyTensor>> input_tensors;
+    input_tensors.push_back(predictor->GetInputTensor("pixel"));
+    input_tensors.push_back(predictor->GetInputTensor("init_ids"));
+    input_tensors.push_back(predictor->GetInputTensor("init_scores"));
+
+    std::vector<std::unique_ptr<paddle::ZeroCopyTensor>> output_tensors;
+    output_tensors.push_back(predictor->GetOutputTensor("cast_1.tmp_0")); // label
+    output_tensors.push_back(predictor->GetOutputTensor("tensor_array_to_tensor_0.tmp_0")); // weight
+  
+    std::vector<std::string> input_list;
+    if (GenerateInputList(&input_list, FLAGS_image_dir)) {
+      LOG(WARNING) << "Get no inputs in image_dir (" << FLAGS_image_dir
+                   << "), use fake inputs instead.";
+      input_list.push_back("dummpy");
+    }
+
+    if (input_list[0] != "dummpy") {
+      std::string input_path = FLAGS_image_dir + "/" + input_list[0];
+      SetZeroCopyInputs(input_tensors, input_path, FLAGS_image_dims);
+    } else {
+      std::string input_path = "";
+      SetZeroCopyInputs(input_tensors, input_path, FLAGS_image_dims);
+    }
+
+    int batch_size = FLAGS_batch_size;
+
+    // warmup run
+    LOG(INFO) << "Warm up run...";
+    {
+      Timer warmup_timer;
+      warmup_timer.tic();
+      predictor->ZeroCopyRun();
+      PrintTime(batch_size, 1, 1, 0, warmup_timer.toc(), 1);
+      if (FLAGS_profile) {
+        paddle::platform::ResetProfiler();
+      }
+    }
+      
+    int num_times = FLAGS_repeat;
+    LOG(INFO) << "Run " << num_times << " times...";
+    Timer run_timer;
+    run_timer.tic();
+    for (int r = 0; r < num_times; r++) {
+      predictor->ZeroCopyRun();
+    }
+    double latency = run_timer.toc() / num_times;
+    PrintTime(batch_size, num_times, 1, 0, latency, 1);
+  } else {
+    std::vector<paddle::PaddleTensor> outputs;
+
+    TestImpl(reinterpret_cast<PaddlePredictor::Config *>(&config), &outputs,
+        use_gpu && (use_analysis || use_tensorrt));
+
+    for (size_t i = 0; i < outputs.size(); ++i) {
+      LOG(INFO) << "<<< output: " << i << " >>>";
+      PrintTensor(outputs[i], 4);
+    }
   }
 }
 

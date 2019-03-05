@@ -26,6 +26,7 @@ limitations under the License. */
 
 DEFINE_bool(use_gpu, true, "Whether use gpu.");
 DEFINE_bool(use_tensorrt, true, "Test the performance of TensorRT engine.");
+DEFINE_bool(use_zerocopy, false, "Use zero-copy api.");
 DEFINE_string(prog_filename, "", "Name of model file.");
 DEFINE_string(param_filename, "", "Name of parameters file.");
 DEFINE_string(image_dir, "", "Path of input data.");
@@ -61,8 +62,7 @@ std::ostream& operator<<(std::ostream& os, const std::vector<T>& value) {
 }
 
 template <typename T>
-void SetupTensor(const std::string filename, paddle::PaddleTensor& tensor,
-                 std::vector<int>* shape, T mean = 0) {
+size_t SetupTensorData(const std::string filename, std::vector<T>* data, std::vector<int>* shape, T mean = 0) {
   std::ifstream is(filename);
 
   size_t size = 1;
@@ -76,22 +76,19 @@ void SetupTensor(const std::string filename, paddle::PaddleTensor& tensor,
   }
   LOG(INFO) << "shape: " << *shape;
 
-  std::vector<T> data;
   for (size_t i = 0; i < size; ++i) {
     T value;
     is >> value;
-    data.push_back(static_cast<T>(value - mean));
+    data->push_back(static_cast<T>(value - mean));
   }
   is.close();
 
-  tensor.shape = *shape;
-  tensor.data.Resize(sizeof(T) * size);
-  std::copy(data.begin(), data.end(), static_cast<T*>(tensor.data.data()));
+  return size;
 }
 
 template <typename T>
-void SetupTensor(paddle::PaddleTensor& tensor, std::vector<int> shape, T lower,
-                 T upper) {
+size_t SetupTensorData(std::vector<T>* data, const std::vector<int>& shape, T lower,
+                     T upper) {
   size_t size = 1;
   for (size_t i = 0; i < shape.size(); ++i) {
     size *= shape[i];
@@ -102,14 +99,103 @@ void SetupTensor(paddle::PaddleTensor& tensor, std::vector<int> shape, T lower,
   std::mt19937 rng(seed++);
   std::uniform_real_distribution<double> uniform_dist(0, 1);
 
-  std::vector<T> data;
   for (size_t i = 0; i < size; ++i) {
-    data.push_back(static_cast<T>(uniform_dist(rng) * (upper - lower) + lower));
+    data->push_back(static_cast<T>(uniform_dist(rng) * (upper - lower) + lower));
   }
 
-  tensor.shape = shape;
-  tensor.data.Resize(sizeof(T) * size);
-  std::copy(data.begin(), data.end(), static_cast<T*>(tensor.data.data()));
+  return size;
+}
+
+template <typename T>
+void SetupTensor(const std::string filename, paddle::PaddleTensor* tensor,
+                 std::vector<int>* shape, T mean = 0) {
+  PADDLE_ENFORCE_NOT_NULL(tensor);
+  PADDLE_ENFORCE_NOT_NULL(shape);
+  PADDLE_ENFORCE_GE(shape->size(), 1UL);
+
+  std::vector<T> data;
+  size_t size = SetupTensorData<T>(filename, &data, shape, mean);
+
+  tensor->shape = *shape;
+  tensor->data.Resize(sizeof(T) * size);
+  std::copy(data.begin(), data.end(), static_cast<T*>(tensor->data.data()));
+}
+
+template <typename T>
+void SetupTensor(paddle::PaddleTensor* tensor, const std::vector<int> &shape, T lower,
+                 T upper) {
+  PADDLE_ENFORCE_NOT_NULL(tensor);
+  PADDLE_ENFORCE_GE(shape.size(), 1UL);
+
+  std::vector<T> data;
+  size_t size = SetupTensorData<T>(&data, shape, lower, upper);
+
+  tensor->shape = shape;
+  tensor->data.Resize(sizeof(T) * size);
+  std::copy(data.begin(), data.end(), static_cast<T*>(tensor->data.data()));
+}
+
+template <typename T>
+void SetupTensor(paddle::PaddleTensor* tensor,
+                 const std::vector<int> &shape, const std::vector<T>& data) {
+  PADDLE_ENFORCE_NOT_NULL(tensor);
+  PADDLE_ENFORCE_GE(shape.size(), 1UL);
+
+  size_t size = 1;
+  for (size_t i = 0; i < shape.size(); ++i) {
+    size *= shape[i];
+  }
+  PADDLE_ENFORCE_EQ(size, data.size());
+
+  tensor->shape = shape;
+  tensor->data.Resize(sizeof(T) * size);
+  std::copy(data.begin(), data.end(), static_cast<T*>(tensor->data.data()));
+}
+
+template <typename T>
+void SetupZeroCopyTensor(const std::string filename, paddle::ZeroCopyTensor* tensor,
+                         std::vector<int>* shape, T mean = 0) {
+  PADDLE_ENFORCE_NOT_NULL(tensor);
+  PADDLE_ENFORCE_NOT_NULL(shape);
+  PADDLE_ENFORCE_GE(shape->size(), 1UL);
+
+  std::vector<T> data;
+  SetupTensorData<T>(filename, &data, shape, mean);
+
+  tensor->Reshape(*shape);
+  std::copy_n(data.begin(), data.size(),
+              tensor->mutable_data<T>(paddle::PaddlePlace::kCPU));
+}
+
+template <typename T>
+void SetupZeroCopyTensor(paddle::ZeroCopyTensor* tensor,
+                         const std::vector<int>& shape, T lower, T upper) {
+  PADDLE_ENFORCE_NOT_NULL(tensor);
+  PADDLE_ENFORCE_GE(shape.size(), 1UL);
+
+  std::vector<T> data;
+  SetupTensorData<T>(&data, shape, lower, upper);
+
+  tensor->Reshape(shape);
+  std::copy_n(data.begin(), data.size(),
+              tensor->mutable_data<T>(paddle::PaddlePlace::kCPU));
+}
+
+template <typename T>
+void SetupZeroCopyTensor(paddle::ZeroCopyTensor* tensor,
+                         const std::vector<int>& shape, const std::vector<T>& data) {
+  PADDLE_ENFORCE_NOT_NULL(tensor);
+  PADDLE_ENFORCE_GE(shape.size(), 1UL);
+
+  size_t size = 1;
+  for (size_t i = 0; i < shape.size(); ++i) {
+    size *= shape[i];
+  }
+  PADDLE_ENFORCE_EQ(size, data.size());
+
+  tensor->Reshape(shape);
+  std::copy_n(data.begin(), data.size(),
+              tensor->mutable_data<T>(paddle::PaddlePlace::kCPU));
 }
 
 template <typename ConfigType>
@@ -140,6 +226,7 @@ void SetConfig<AnalysisConfig>(AnalysisConfig* config, std::string model_dir,
   }
   if (use_gpu) {
     config->EnableUseGpu(100, 0);
+    config->pass_builder()->DeletePass("identity_scale_op_clean_pass");
     if (use_tensorrt) {
       config->EnableTensorRtEngine(1 << 10, batch_size);
       config->pass_builder()->DeletePass("conv_bn_fuse_pass");
@@ -147,8 +234,11 @@ void SetConfig<AnalysisConfig>(AnalysisConfig* config, std::string model_dir,
     } else {
       config->SwitchIrOptim();
     }
-    config->pass_builder()->TurnOnDebug();
   }
+  if (FLAGS_use_zerocopy) {
+    config->SwitchUseFeedFetchOps(false);
+  }
+  config->pass_builder()->TurnOnDebug();
 }
 
 int GenerateInputList(std::vector<std::string>* input_list,
