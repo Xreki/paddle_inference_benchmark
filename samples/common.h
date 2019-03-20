@@ -305,7 +305,7 @@ void TestImpl(const PaddlePredictor::Config* config,
       SetInputs(inputs, input_path, FLAGS_image_dims);
     }
 
-    if (input_list.size() <= 1) {
+    if (i == 0) {
       // warmup run
       LOG(INFO) << "Warm up run...";
       {

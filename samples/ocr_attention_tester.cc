@@ -121,20 +121,20 @@ void SetInputs(std::vector<paddle::PaddleTensor> &input_tensors,
   //  
   // parent_idx
   //  
-  paddle::PaddleTensor parent_idx_tensor;
+  // paddle::PaddleTensor parent_idx_tensor;
 
-  std::vector<int> parent_idx_shape = {1};
-  std::vector<int64_t> parent_idx = {0};
+  // std::vector<int> parent_idx_shape = {1};
+  // std::vector<int64_t> parent_idx = {0};
 
-  parent_idx_tensor.name = "parent_idx";
-  parent_idx_tensor.dtype = paddle::PaddleDType::INT64;
-  SetupTensor<int64_t>(&parent_idx_tensor, parent_idx_shape, parent_idx);
+  // parent_idx_tensor.name = "parent_idx";
+  // parent_idx_tensor.dtype = paddle::PaddleDType::INT64;
+  // SetupTensor<int64_t>(&parent_idx_tensor, parent_idx_shape, parent_idx);
 
   // input_tensors
   input_tensors.push_back(image_tensor);
   input_tensors.push_back(init_ids_tensor);
   input_tensors.push_back(init_scores_tensor);
-  input_tensors.push_back(parent_idx_tensor);
+  // input_tensors.push_back(parent_idx_tensor);
 
 #if 0
   //
