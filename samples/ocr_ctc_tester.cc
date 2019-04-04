@@ -64,12 +64,13 @@ void SetInputs(std::vector<paddle::PaddleTensor> &input_tensors,
   input_tensors.push_back(image_tensor);
 }
 
-void SetZeroCopyInputs(std::vector<std::unique_ptr<paddle::ZeroCopyTensor>>& input_tensors,
-                       std::string &image_path, std::string &image_dims) {
+void SetZeroCopyInputs(
+    std::vector<std::unique_ptr<paddle::ZeroCopyTensor>> &input_tensors,
+    std::string &image_path, std::string &image_dims) {
   //
   // image tensor -> pixel
   //
-  auto& image_tensor = input_tensors[0];
+  auto &image_tensor = input_tensors[0];
 
   int batch_size = 1;
   int channel = 1;
@@ -94,11 +95,12 @@ void SetZeroCopyInputs(std::vector<std::unique_ptr<paddle::ZeroCopyTensor>>& inp
 
   std::vector<int> image_shape = {batch_size, channel, height, width};
   if (image_path.empty()) {
-    SetupZeroCopyTensor<float>(image_tensor.get(), image_shape, static_cast<float>(-1),
-                       static_cast<float>(1));
+    SetupZeroCopyTensor<float>(image_tensor.get(), image_shape,
+                               static_cast<float>(-1), static_cast<float>(1));
   } else {
     LOG(INFO) << "image_path: " << image_path;
-    SetupZeroCopyTensor<float>(image_path, image_tensor.get(), &image_shape, 127.5);
+    SetupZeroCopyTensor<float>(image_path, image_tensor.get(), &image_shape,
+                               127.5);
   }
 }
 
@@ -116,17 +118,18 @@ void profile(std::string model_dir, bool use_gpu, bool use_analysis,
     input_tensors.push_back(predictor->GetInputTensor("pixel"));
 
     std::vector<std::unique_ptr<paddle::ZeroCopyTensor>> output_tensors;
-    // output_tensors.push_back(predictor->GetOutputTensor("cast_1.tmp_0")); // label
-  
+    // output_tensors.push_back(predictor->GetOutputTensor("cast_1.tmp_0")); //
+    // label
+
     std::vector<std::string> input_list;
-    if (GenerateInputList(&input_list, FLAGS_image_dir)) {
-      LOG(WARNING) << "Get no inputs in image_dir (" << FLAGS_image_dir
+    if (GenerateInputList(&input_list, FLAGS_input_dir)) {
+      LOG(WARNING) << "Get no inputs in input_dir (" << FLAGS_input_dir
                    << "), use fake inputs instead.";
       input_list.push_back("dummpy");
     }
 
     if (input_list[0] != "dummpy") {
-      std::string input_path = FLAGS_image_dir + "/" + input_list[0];
+      std::string input_path = input_list[0];
       SetZeroCopyInputs(input_tensors, input_path, FLAGS_image_dims);
     } else {
       std::string input_path = "";
@@ -146,7 +149,7 @@ void profile(std::string model_dir, bool use_gpu, bool use_analysis,
         paddle::platform::ResetProfiler();
       }
     }
-      
+
     int num_times = FLAGS_repeat;
     LOG(INFO) << "Run " << num_times << " times...";
     Timer run_timer;
@@ -160,7 +163,7 @@ void profile(std::string model_dir, bool use_gpu, bool use_analysis,
     std::vector<paddle::PaddleTensor> outputs;
 
     TestImpl(reinterpret_cast<PaddlePredictor::Config *>(&config), &outputs,
-        use_gpu && (use_analysis || use_tensorrt));
+             use_gpu && (use_analysis || use_tensorrt));
 
     for (size_t i = 0; i < outputs.size(); ++i) {
       LOG(INFO) << "<<< output: " << i << " >>>";

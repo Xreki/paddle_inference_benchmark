@@ -29,11 +29,33 @@ DEFINE_bool(use_tensorrt, true, "Test the performance of TensorRT engine.");
 DEFINE_bool(use_zerocopy, false, "Use zero-copy api.");
 DEFINE_string(prog_filename, "", "Name of model file.");
 DEFINE_string(param_filename, "", "Name of parameters file.");
-DEFINE_string(image_dir, "", "Path of input data.");
+DEFINE_string(input_dir, "", "Path of input data.");
 DEFINE_string(image_dims, "", "Dims of input data.");
 
 namespace paddle {
 namespace inference {
+
+template <typename T>
+T StringTo(const std::string& str) {
+  std::istringstream is(str);
+  T value;
+  is >> value;
+  return value;
+}
+
+static bool StartWith(const std::string& str, const std::string& substr) {
+  return str.find(substr) == 0;
+}
+
+static bool EndWith(const std::string& str, const std::string& substr) {
+  return str.rfind(substr) == (str.length() - substr.length());
+}
+
+static void EraseEndSep(std::string* str, std::string substr = ";") {
+  if (EndWith(*str, substr)) {
+    str->erase(str->length() - substr.length(), str->length());
+  }
+}
 
 void SetInputs(std::vector<paddle::PaddleTensor>& input_tensors,
                std::string& input_path, std::string& input_dims);
@@ -46,6 +68,47 @@ std::vector<int> ParseDims(std::string dims_str) {
     dims.push_back(std::stoi(token));
   }
   return dims;
+}
+
+std::vector<std::vector<size_t>> ParseLoD(std::istream& is) {
+  std::string lod_str;
+  std::string start_sep = "{{";
+  std::string end_sep = "}}";
+
+  std::string sep;
+  is >> sep;
+  if (StartWith(sep, start_sep)) {
+    lod_str += sep;
+    while (!EndWith(sep, end_sep)) {
+      is >> sep;
+      lod_str += sep;
+    }
+  }
+  EraseEndSep(&lod_str);
+  PADDLE_ENFORCE_GE(lod_str.length(), 4U);
+  LOG(INFO) << "lod: " << lod_str << ", length: " << lod_str.length();
+
+  // Parse the lod_str
+  std::vector<std::vector<size_t>> lod;
+  for (size_t i = 1; i < lod_str.length() - 1;) {
+    if (lod_str[i] == '{') {
+      std::vector<size_t> level;
+      while (lod_str[i] != '}') {
+        ++i;
+
+        std::string number;
+        while (lod_str[i] >= '0' && lod_str[i] <= '9') {
+          number += lod_str[i];
+          ++i;
+        }
+        level.push_back(StringTo<size_t>(number));
+      }
+      lod.push_back(level);
+    } else if (lod_str[i] != '{') {
+      ++i;
+    }
+  }
+  return lod;
 }
 
 template <typename T>
@@ -62,7 +125,8 @@ std::ostream& operator<<(std::ostream& os, const std::vector<T>& value) {
 }
 
 template <typename T>
-size_t SetupTensorData(const std::string filename, std::vector<T>* data, std::vector<int>* shape, T mean = 0) {
+size_t SetupTensorData(const std::string filename, std::vector<T>* data,
+                       std::vector<int>* shape, T mean = 0) {
   std::ifstream is(filename);
 
   size_t size = 1;
@@ -87,8 +151,8 @@ size_t SetupTensorData(const std::string filename, std::vector<T>* data, std::ve
 }
 
 template <typename T>
-size_t SetupTensorData(std::vector<T>* data, const std::vector<int>& shape, T lower,
-                     T upper) {
+size_t SetupTensorData(std::vector<T>* data, const std::vector<int>& shape,
+                       T lower, T upper) {
   size_t size = 1;
   for (size_t i = 0; i < shape.size(); ++i) {
     size *= shape[i];
@@ -100,7 +164,8 @@ size_t SetupTensorData(std::vector<T>* data, const std::vector<int>& shape, T lo
   std::uniform_real_distribution<double> uniform_dist(0, 1);
 
   for (size_t i = 0; i < size; ++i) {
-    data->push_back(static_cast<T>(uniform_dist(rng) * (upper - lower) + lower));
+    data->push_back(
+        static_cast<T>(uniform_dist(rng) * (upper - lower) + lower));
   }
 
   return size;
@@ -122,8 +187,8 @@ void SetupTensor(const std::string filename, paddle::PaddleTensor* tensor,
 }
 
 template <typename T>
-void SetupTensor(paddle::PaddleTensor* tensor, const std::vector<int> &shape, T lower,
-                 T upper) {
+void SetupTensor(paddle::PaddleTensor* tensor, const std::vector<int>& shape,
+                 T lower, T upper) {
   PADDLE_ENFORCE_NOT_NULL(tensor);
   PADDLE_ENFORCE_GE(shape.size(), 1UL);
 
@@ -136,8 +201,8 @@ void SetupTensor(paddle::PaddleTensor* tensor, const std::vector<int> &shape, T 
 }
 
 template <typename T>
-void SetupTensor(paddle::PaddleTensor* tensor,
-                 const std::vector<int> &shape, const std::vector<T>& data) {
+void SetupTensor(paddle::PaddleTensor* tensor, const std::vector<int>& shape,
+                 const std::vector<T>& data) {
   PADDLE_ENFORCE_NOT_NULL(tensor);
   PADDLE_ENFORCE_GE(shape.size(), 1UL);
 
@@ -153,7 +218,8 @@ void SetupTensor(paddle::PaddleTensor* tensor,
 }
 
 template <typename T>
-void SetupZeroCopyTensor(const std::string filename, paddle::ZeroCopyTensor* tensor,
+void SetupZeroCopyTensor(const std::string filename,
+                         paddle::ZeroCopyTensor* tensor,
                          std::vector<int>* shape, T mean = 0) {
   PADDLE_ENFORCE_NOT_NULL(tensor);
   PADDLE_ENFORCE_NOT_NULL(shape);
@@ -183,7 +249,8 @@ void SetupZeroCopyTensor(paddle::ZeroCopyTensor* tensor,
 
 template <typename T>
 void SetupZeroCopyTensor(paddle::ZeroCopyTensor* tensor,
-                         const std::vector<int>& shape, const std::vector<T>& data) {
+                         const std::vector<int>& shape,
+                         const std::vector<T>& data) {
   PADDLE_ENFORCE_NOT_NULL(tensor);
   PADDLE_ENFORCE_GE(shape.size(), 1UL);
 
@@ -196,6 +263,54 @@ void SetupZeroCopyTensor(paddle::ZeroCopyTensor* tensor,
   tensor->Reshape(shape);
   std::copy_n(data.begin(), data.size(),
               tensor->mutable_data<T>(paddle::PaddlePlace::kCPU));
+}
+
+template <typename T>
+void SetupLoDTensor(const std::string filename, paddle::PaddleTensor* tensor) {
+  PADDLE_ENFORCE_NOT_NULL(tensor);
+
+  std::ifstream is(filename);
+  std::string sep;
+  // lod
+  is >> sep;
+  std::vector<std::vector<size_t>> lod;
+  if (sep == "lod:") {
+    lod = ParseLoD(is);
+  }
+
+  // shape
+  is >> sep;
+  std::vector<int> shape;
+  if (sep == "shape:") {
+    std::string dims_str;
+    is >> dims_str;
+    shape = ParseDims(dims_str);
+  }
+
+  PADDLE_ENFORCE_GE(shape.size(), 1U);
+
+  size_t size = 1;
+  for (size_t i = 0; i < shape.size(); ++i) {
+    size *= shape[i];
+  }
+  LOG(INFO) << "shape: " << shape;
+
+  // data
+  is >> sep;
+  std::vector<T> data;
+  if (sep == "data:") {
+    for (size_t i = 0; i < size; ++i) {
+      T value;
+      is >> value;
+      data.push_back(static_cast<T>(value));
+    }
+  }
+  is.close();
+
+  tensor->lod = lod;
+  tensor->shape = shape;
+  tensor->data.Resize(sizeof(T) * size);
+  std::copy(data.begin(), data.end(), static_cast<T*>(tensor->data.data()));
 }
 
 template <typename ConfigType>
@@ -266,7 +381,7 @@ int GenerateInputList(std::vector<std::string>* input_list,
         continue;
       }
     }
-    input_list->push_back(filename);
+    input_list->push_back(input_dir + "/" + filename);
   }
   closedir(dir);
   return 0;
@@ -274,7 +389,7 @@ int GenerateInputList(std::vector<std::string>* input_list,
 
 void TestImpl(const PaddlePredictor::Config* config,
               std::vector<paddle::PaddleTensor>* outputs,
-              bool use_analysis = true) {
+              bool use_analysis = true, bool has_single_input = true) {
   PrintConfig(config, use_analysis);
 
   int batch_size = FLAGS_batch_size;
@@ -286,20 +401,28 @@ void TestImpl(const PaddlePredictor::Config* config,
   }
 
   std::vector<std::string> input_list;
-  if (GenerateInputList(&input_list, FLAGS_image_dir)) {
-    LOG(WARNING) << "Get no inputs in image_dir (" << FLAGS_image_dir
+  if (GenerateInputList(&input_list, FLAGS_input_dir)) {
+    LOG(WARNING) << "Get no inputs in input_dir (" << FLAGS_input_dir
                  << "), use fake inputs instead.";
     input_list.push_back("dummpy");
   }
 
+  size_t num_samples = 0;
+  if (has_single_input) {
+    num_samples = input_list.size();
+  } else {
+    num_samples = input_list.size() > 0U ? 1U : 0U;
+    input_list.clear();
+    input_list.push_back(FLAGS_input_dir);
+  }
+
   double total_latency = 0.0f;
-  for (size_t i = 0; i < input_list.size(); ++i) {
+  for (size_t i = 0; i < num_samples; ++i) {
     std::vector<paddle::PaddleTensor> inputs;
     outputs->clear();
 
     if (input_list[i] != "dummpy") {
-      std::string input_path = FLAGS_image_dir + "/" + input_list[i];
-      SetInputs(inputs, input_path, FLAGS_image_dims);
+      SetInputs(inputs, input_list[i], FLAGS_image_dims);
     } else {
       std::string input_path = "";
       SetInputs(inputs, input_path, FLAGS_image_dims);
@@ -331,7 +454,7 @@ void TestImpl(const PaddlePredictor::Config* config,
       total_latency += latency;
     }
   }
-  PrintTime(batch_size, num_times, 1, 0, total_latency, input_list.size());
+  PrintTime(batch_size, num_times, 1, 0, total_latency, num_samples);
 }
 
 template <typename T>
